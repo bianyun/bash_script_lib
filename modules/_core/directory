@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+change_dir_ownership() {
+  check_if_func_args_num_equals_to 2 "user_and_group, dir_path"
+  local user_and_group=$1
+  local dir_path=$2
+  [ -d $dir_path ] && chown $user_and_group $dir_path
+}
+
+recursively_change_dir_ownership() {
+  check_if_func_args_num_equals_to 2 "user_and_group, dir_path"
+  local user_and_group=$1
+  local dir_path=$2
+  
+  [ -d $dir_path ] && chown -R $user_and_group $dir_path
+}

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+is_ipv6_enabled() {
+  [ $(cat /sys/module/ipv6/parameters/disable) -eq 0 ] && echo true || echo false
+}
+
+is_ipv6_disabled() {
+  $(is_ipv6_enabled) && echo false || echo true
+}
+
+setup_netconfig_file_if_needed() {
+  if $(is_ipv6_disabled); then
+    comment_single_line_by_keyword "/etc/netconfig" "udp6"
+    comment_single_line_by_keyword "/etc/netconfig" "tcp6"
+  fi
+}

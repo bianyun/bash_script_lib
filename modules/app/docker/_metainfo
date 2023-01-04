@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+get_existing_docker_version() {
+  check_if_commands_valid docker
+  echo "$(docker --version | cut -d',' -f 1 | cut -d' ' -f 3)"
+}
+
+check_if_docker_ce_version_valid() {
+  check_if_func_args_num_equals_to 1 "docker_ce_version"
+  local docker_ce_version=$1
+  
+  if [[ ! $docker_ce_version =~ $BSL_REGEX_DOCKER_CE_VERSION ]]; then
+    fail "Docker version [$docker_ce_version] is not valid."
+  fi
+}
+

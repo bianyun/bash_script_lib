@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+is_systemd_service_unknown() {
+  [[ $(systemctl is-active $1) == "unknown" ]] && true || false
+}
+
+is_systemd_service_active() {
+  [[ $(systemctl is-active $1) == "active" ]] && true || false
+}
+
+is_systemd_service_enabled() {
+  [[ $(systemctl is-enabled $1) == "enabled" ]] && true || false
+}
+
+is_systemd_service_inactive() {
+  [[ $(systemctl is-active $1) == "inactive" ]] && true || false
+}
+
+is_systemd_service_disabled() {
+  [[ $(systemctl is-enabled $1) == "disabled" ]] && true || false
+}

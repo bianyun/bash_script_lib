@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+ask_user_with_answer() {
+  check_if_func_args_num_at_least 1 "prompt_msg..."
+  local prompt_msg=$*
+  print "$(colorize cyan "[  INPUT] $*"): "
+  read -p "" answer
+  echo "$answer"
+}
+
+is_user_confirmed_yes() {
+  check_if_func_args_num_at_least 1 "prompt_msg..."
+  local prompt_msg=$*
+  print "$(colorize cyan [CONFIRM] $prompt_msg) $(colorize yellow [y/N]): "
+  read -p "" answer
+  answer="${answer:-no}"
+  
+  # if [ "${answer,,}" = "yes" ] || [ "${answer,,}" = "y" ] || [ "${answer,,}" = "true" ]; then
+    # echo true
+  # else 
+    # echo false
+  # fi
+  
+  local words_means_ok="yes y true ok fine yeah good great right cool"
+  $(is_array_contains_item "$words_means_ok" "${answer,,}") && echo true || echo false
+}

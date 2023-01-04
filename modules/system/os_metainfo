@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+get_linux_os_id() {
+  echo "$(_get_linux_os_id)"
+}
+
+get_linux_os_version() {
+  local linux_os_id=$(get_linux_os_id)
+  echo "${linux_os_id}_$(eval get_${linux_os_id}_version)"
+}

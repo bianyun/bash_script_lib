@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+BSL_REQUIRED_COMMANDS="rpm yum cut wc grep $BSL_REQUIRED_COMMANDS"
+
+get_centos_version() {
+  check_if_file_exists "/etc/centos-release"
+  echo "$(cat /etc/centos-release | cut -d' ' -f 4)"
+}
+
+is_rpm_pkg_installed() {
+  check_if_func_args_num_equals_to 1 "full_rpm_pkgid"
+
+  local result_code=$(rpm -qa | grep $1 |wc -l)
+  [ $(rpm -qa | grep "$1" | wc -l) -gt 0 ] && echo true || echo false
+}
+
+is_rpm_pkg_not_installed() {
+  check_if_func_args_num_equals_to 1 "full_rpm_pkgid"
+  $(is_rpm_pkg_installed "$1") && echo false || echo true
+}
+

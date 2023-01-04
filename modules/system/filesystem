@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+check_if_dir_exists() {
+  check_if_func_args_num_equals_to 1 "dir_path"
+  _check_if_dir_exists "$1"
+}
+
+check_if_file_exists() {
+  check_if_func_args_num_equals_to 1 "file_path"
+  
+  # Don't refatoring following three lines code to single line style
+  if [ ! -f $1 ]; then
+    fail "Required file not exists: \n\t  [$1]."
+  fi
+}
+
+do_resolve_unique_filename_by_pattern() {
+  check_if_func_args_num_equals_to 3 "dir_path, filename_pattern, file_desc"
+  local dir_path="${1%/}"
+  local filename_pattern=$2
+  local file_desc=$3
+  
+  check_if_dir_exists $dir_path
+  local matched_count=$(ls ${dir_path}/${filename_pattern} 2>/dev/null | wc -l)
+  
+  print "[   INFO] Resolving $file_desc... "
+  
+  if [ $matched_count -eq 1 ]; then
+    println "$(colorize green [OK])" 
+    local result="$(ls ${dir_path}/${filename_pattern})"
+    result="$(basename $result)"
+    log_debug "Resolved $file_desc: \n\t  [$dir_path/$result]"
+    echo $result
+  else
+    println
+
+    [ $matched_count -eq 0 ] && fail "Cannot find any file matches pattern [$filename_pattern] in dir: \n\t  [$dir_path]."
+
+    [ $matched_count -gt 1 ] && fail "Find more than one file match pattern [$filename_pattern] in dir: \n\t  [$dir_path]."
+  fi
+}
+
+resolve_unique_install_filename() {
+  check_if_func_args_num_at_least 1 "app_name, [app_version]"
+  local app_name=$1
+  local app_version=$2
+  
+  local dir_path=$(get_install_files_dir)
+  local file_pattern=$(get_install_filename_pattern $app_name $app_version)
+  local file_desc="${app_name} install file"
+  echo "$(do_resolve_unique_filename_by_pattern $dir_path $file_pattern "$file_desc")"
+}
+

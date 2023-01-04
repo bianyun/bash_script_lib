@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+is_command_valid() {
+  check_if_func_args_num_equals_to 1 "command"
+  type $1 > /dev/null 2>&1
+  [ $? -eq 0 ] && echo true || echo false
+}
+
+is_command_not_valid() {
+  check_if_func_args_num_equals_to 1 "command"
+  $(is_command_valid "$@") && echo false || echo true
+}
+
+check_if_commands_valid() {
+  check_if_func_args_num_at_least 1 "command..."
+
+  local commands_array=($@)
+  local invalid_commands=()
+  
+  for command in "${commands_array[@]}"; do
+    if $(is_command_not_valid $command); then
+      invalid_commands+=($command)
+    fi
+  done
+  
+  # Don't refatoring following three lines code to single line style
+  if [ "${#invalid_commands[@]}" -eq 1 ]; then
+    fail "Command [${invalid_commands[@]}] is not valid."
+  fi
+
+  # Don't refatoring following three lines code to single line style
+  if [ "${#invalid_commands[@]}" -gt 1 ]; then
+    fail "Commands [$(join_by ', ' ${invalid_commands[@]})] are not valid."
+  fi
+}
+
+get_existing_app_version_by_main_command_name() {
+  check_if_func_args_num_equals_to 1 "main_command_name"
+  local main_command_name="${1,,}"
+  eval "get_existing_${main_command_name}_version"
+}
+
+exec_command_quietly() {
+  check_if_func_args_num_at_least 1 "command_str, [extra_cmd_need_exec_anyway]"
+  local command_str=$1
+  local extra_cmd_need_exec_anyway=$2
+  
+  set +e
+  if $(is_trace_on); then
+    eval "$command_str"
+  elif $(is_debug_on); then
+    eval "$command_str" > /dev/null
+  else
+    eval "$command_str" > /dev/null 2>&1
+  fi
+  
+  local command_exec_result=$?
+  if [ -n "$extra_cmd_need_exec_anyway" ]; then
+    eval "$extra_cmd_need_exec_anyway" > /dev/null 2>&1
+  fi
+  set -e
+
+  if [ $command_exec_result -ne 0 ]; then
+    log_debug "command_str=[$command_str]"
+    log_debug "command_exec_result=[$command_exec_result]"
+    log_error "Failed to exec command [${command_str}]."
+    if $(is_debug_off); then
+      log_error "You can set [debug_enabled=\"true\"] and re-exec the above command to see why it fails."
+    fi
+    exitscript
+  fi
+}
+
+exec_command_silently_with_result_code() {
+  check_if_func_args_num_equals_to 1 "command_str"
+  local command_str=$1
+  
+  set +e
+  eval "$command_str > /dev/null 2>&1" 
+  local command_exec_result=$?
+  set -e
+
+  echo "$command_exec_result"
+}
+

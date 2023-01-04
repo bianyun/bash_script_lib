@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+
+install_docker_ce() {
+  check_if_func_args_num_equals_to 2 "app_name, app_version"
+  local app_name=$1
+  local app_version=$2
+  
+  local app_desc=$(resolve_app_desc $app_name $app_version)
+  local install_files_dir=$(get_install_files_dir)
+  check_if_dir_exists $install_files_dir
+  
+  check_if_docker_ce_version_valid $app_version
+  
+  log_notice "Start to install ${app_desc}..."
+
+  if $(is_less_than $app_version "20.10.13"); then
+    log_warn "$app_name version [v$app_version] < [v20.10.13], docker-compose (v1.11.0+) is required."
+    local docker_compose_install_tar_gz_filename=$(resolve_unique_install_filename "docker-compose")
+    local docker_compose_install_tar_gz_filepath="${install_files_dir}/${docker_compose_install_tar_gz_filename}"
+    install_docker_compose $app_version $docker_compose_install_tar_gz_filepath
+  else
+    log_warn "$app_name version [v$app_version] >= [v20.10.13]. \
+              \n\t  Directly use its built-in docker-compose-plugin (v2) rather than docker-compose (v1)."
+    rm -f "/usr/local/bin/docker-compose"
+    rm -f "/etc/bash_completion.d/docker-compose"
+  fi
+  
+  uninstall_old_version_docker
+  check_if_no_need_to_install_app $app_name $app_version "docker"
+  
+  local docker_install_tar_gz_filename=$(resolve_unique_install_filename $app_name $app_version)
+  local docker_install_tar_gz_filepath="${install_files_dir}/${docker_install_tar_gz_filename}"
+
+  local app_id=$(resolve_app_id $app_name $app_version)
+  local tmp_extracted_dirpath="/tmp/${app_id}"
+  tar zxf $docker_install_tar_gz_filepath -C /tmp
+
+  show_msg_app_install_may_take_a_while $app_name
+  safely_install_local_pkgs_offline $tmp_extracted_dirpath
+
+  exec_command_quietly "systemctl start docker"
+  exec_command_quietly "systemctl enable docker 2>/dev/null"
+  
+  if [ "$SUDO_USER" != "" ]; then
+    exec_command_quietly "usermod -aG docker $SUDO_USER"
+  fi
+
+
+  cat <<EOF > /etc/sysctl.d/bridge-docker.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+EOF
+
+  exec_command_quietly "sysctl -p"
+  exec_command_quietly "sysctl -w net.bridge.bridge-nf-call-ip6tables=1 > /dev/null"
+  exec_command_quietly "sysctl -w net.bridge.bridge-nf-call-iptables=1 > /dev/null"
+}
+
+install_docker_compose() {
+  check_if_func_args_num_equals_to 2 "docker_ce_version, docker_compose_install_tar_gz_filepath"
+  local docker_ce_version=$1
+  local tar_gz_filepath=$2
+  
+  local app_name="docker-compose"
+  local app_id=$(parse_app_id_from_install_file $tar_gz_filepath)
+  local app_version="${app_id##*-}"
+  
+  [ -z "$app_version" ] && fail "Failed to parse docker-compose version from install file: \
+                                  \n\t  [$tar_gz_filepath]."
+                                  
+  local min_docker_compose_plugin_version=$(resolve_min_docker_compose_plugin_version $docker_ce_version)
+  
+  log_debug "resolved_docker_compose_version=[$app_version]"
+  if $(is_less_than $app_version $min_docker_compose_plugin_version); then
+    fail "Required min version of docker-compose: [$min_docker_compose_plugin_version] is not satisfied. \
+          \n\t  The docker-compose version resolved from install file is [$app_version]."
+  fi
+  
+  local app_desc=$(resolve_app_desc $app_name $app_version)
+  local tmp_extracted_dirpath="/tmp/${app_id}"
+  
+  log_info "Start to install $app_desc..."
+  
+  tar zxf $tar_gz_filepath -C /tmp
+  
+  local docker_compose_exec_filepath="${tmp_extracted_dirpath}/${app_id}-Linux-x86_64"
+  local docker_compose_bash_completion_path="${tmp_extracted_dirpath}/docker-compose-bash-completion-${app_version}"
+  
+  check_if_file_exists $docker_compose_exec_filepath
+  check_if_file_exists $docker_compose_bash_completion_path
+  
+  cp -a $docker_compose_bash_completion_path /etc/bash_completion.d/docker-compose
+  cp -a $docker_compose_exec_filepath /usr/local/bin/docker-compose
+  chmod u+x /usr/local/bin/docker-compose
+
+  safely_install_local_pkgs_offline $tmp_extracted_dirpath
+  rm -rf $tmp_extracted_dirpath
+
+  show_msg_app_install_finished info "$app_desc"
+}

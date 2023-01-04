@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+resolve_docker_image_build_context_dir() {
+  if [ -z "$BSL_IMAGE_BUILD_CONTEXT_DIR" ]; then
+    BSL_IMAGE_BUILD_CONTEXT_DIR=$(realpath ${SCRIPT_DIR}/../context)
+  fi
+  echo $BSL_IMAGE_BUILD_CONTEXT_DIR
+}
+
+resolve_docker_image_file_output_dir() {
+  if [ -z "$BSL_IMAGE_FILE_OUTPUT_DIR" ]; then
+    BSL_IMAGE_FILE_OUTPUT_DIR=$(realpath ${SCRIPT_DIR}/../output)
+  fi
+  [ ! -d $BSL_IMAGE_FILE_OUTPUT_DIR ] && mkdir -p $BSL_IMAGE_FILE_OUTPUT_DIR
+  echo $BSL_IMAGE_FILE_OUTPUT_DIR
+}
+
+extract_base_image_tags_from_dockerfile() {
+  check_if_func_args_num_equals_to 1 "dockerfile_path"
+  echo "$(join_by ' ' $(cat $1 | grep FROM | awk '{$1=$1;print}' | cut -d' ' -f 2))"
+}
+
+build_docker_image() {
+  check_if_func_args_num_equals_to 1 "output_image_tag"
+  local output_image_tag=$1
+  
+  log_notice "Start to build docker image [$output_image_tag]..."
+  
+  local image_build_context_dir=$(resolve_docker_image_build_context_dir)
+  local dockerfile_path="${image_build_context_dir}/Dockerfile"
+
+  check_if_dir_exists $image_build_context_dir
+  check_if_file_exists $dockerfile_path
+
+  load_docker_images_from_install_files_dir
+
+  local dependent_image_tags=$(extract_base_image_tags_from_dockerfile $dockerfile_path)
+  check_if_docker_image_array_all_exist "$dependent_image_tags"
+
+  log_info "Image building process may take a while, please be patient..."
+  sleep 2
+
+  local build_commands="DOCKER_BUILDKIT=1 docker build -f $dockerfile_path -t $output_image_tag $image_build_context_dir"
+  exec_command_quietly "$build_commands" "println"
+  exec_command_quietly "docker image prune -f"
+
+  log_info "Docker image has been built successfully, image tag: [$output_image_tag]. "
+}
+
+save_docker_image_to_tar_gz() {
+  check_if_func_args_num_at_least 1 "image_tag, [classifer]" 
+  local image_tag=$1
+  local classifer=$2
+  
+  local image_file_output_dir=$(resolve_docker_image_file_output_dir)
+
+  local output_image_filename="$(resolve_docker_image_filename_by_image_tag $image_tag $classifer)"
+  local output_image_filepath="${image_file_output_dir}/${output_image_filename}"
+  
+  if [ -f $output_image_filepath ]; then
+    log_warn "Output image file already exists, check if it has same sha-256 as the image..."
+    
+    local sha256_of_existing_file=$(parse_docker_image_sha256_from_image_file $output_image_filepath)
+    local sha256_of_image=$(get_docker_image_sha256 $image_tag)
+
+    log_debug "sha256_of_existing_file = [$sha256_of_existing_file]"
+    log_debug "sha256_of_image = [$sha256_of_image]"
+    
+    if [ "$sha256_of_existing_file" = "$sha256_of_image" ]; then
+      log_info "Existing image file has same sha-256 as the current image, no need to save. \
+                \n\t  $(colorize yellow [$output_image_filepath])"
+      println_script_total_time_desc_and_exit
+    else
+      log_info "Existing image file's sha-256 is not same as the image."
+    fi
+  fi
+  
+  log_info "Saving docker image to compressed tar.gz file, may take minutes, please be patient ..."
+  exec_command_quietly "docker save $image_tag | gzip > $output_image_filepath"
+  
+  log_info "Docker image file has been saved to following location successfully: \
+            \n\t  [$output_image_filepath]."
+}

@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+
+is_docker_image_exists() {
+  check_if_func_args_num_equals_to 1 "image_tag"
+  docker image inspect $1 > /dev/null 2>&1
+  [ $? -eq 0 ] && echo true || echo false
+}
+
+is_docker_image_not_exists() {
+  check_if_func_args_num_equals_to 1 "image_tag"
+  $(is_docker_image_exists $1) && echo false || echo true
+}
+
+check_if_docker_image_name_valid() {
+  check_if_func_args_num_equals_to 1 "docker_image_name"
+  local docker_image_name=$1
+  
+  if [[ ! $docker_image_name =~ $BSL_REGEX_DOCKER_IMAGE_NAME ]]; then
+    fail "Docker image name [$docker_image_name] is not valid."
+  fi
+}
+
+check_if_docker_image_version_valid() {
+  check_if_func_args_num_equals_to 1 "docker_image_version"
+  local docker_image_version=$1
+  
+  if [[ ! $docker_image_version =~ $BSL_REGEX_DOCKER_IMAGE_VERSION ]]; then
+      fail "Docker image version [$docker_image_version] is not valid."
+  fi
+}
+
+check_if_docker_image_tag_valid() {
+  check_if_func_args_num_equals_to 1 "docker_image_tag"
+  local docker_image_tag=$1
+  
+  if [[ ! $docker_image_tag =~ $BSL_REGEX_DOCKER_IMAGE_TAG ]]; then
+    fail "Docker image tag [$docker_image_tag] is not valid."
+  fi
+}
+
+get_docker_image_sha256() {
+  check_if_func_args_num_equals_to 1 "image_tag"
+  echo "$(docker image inspect $1 -f '{{.Id}}' | cut -d':' -f2)"
+}
+
+get_docker_image_filename_pattern() {
+  check_if_func_args_num_equals_to 2 "image_name, image_version"
+  local image_name=$1
+  local image_version=$2
+  
+  local result="${image_name}"
+  if [ "${image_version,,}" != "latest" ]; then
+    result="${result}-${image_version}"
+  fi
+  
+  echo "${result}-image*.tar.gz"
+}
+
+parse_docker_image_sha256_from_image_file() {
+  check_if_func_args_num_equals_to 1 "image_tar_gz_filepath"
+  local image_tar_gz_filepath=$1
+  
+  check_if_file_exists $image_tar_gz_filepath
+  
+  log_debug "Resolving image sha256 from image file [$(basename $image_tar_gz_filepath)]..."
+  echo "$(tar ztf $image_tar_gz_filepath | grep -v manifest.json|grep "[.]json" | cut -d'.' -f1)"
+}
+
+load_docker_image_if_needed() {
+  check_if_func_args_num_equals_to 3 "image_tag, image_tar_gz_filepath, file_image_sha256"
+  local image_tag=$1
+  local image_tar_gz_filepath=$2
+  local file_image_sha256=$3
+
+  local docker_image_not_exists=$(is_docker_image_not_exists $image_tag)
+  if $docker_image_not_exists || \
+        [ "$(get_docker_image_sha256 $image_tag)" != "$file_image_sha256" ]; then
+    if $docker_image_not_exists; then
+      log_info "Docker image [${image_tag}] does not exist."
+    else
+      log_warn "Docker image [${image_tag}] exists, but its sha-256 is not same as image file."
+    fi
+    log_info "Loading docker image from file: [${image_tar_gz_filename}]..."
+    exec_command_quietly "docker load < ${image_tar_gz_filepath}"
+    log_info "Finished loading docker image [${image_tag}]."
+  else
+    log_debug "Docker image exists and its sha-256 is same as image file, no need to load image."
+  fi
+}
+
+load_docker_images_from_install_files_dir() {
+  local install_files_dir=$(get_install_files_dir)
+  
+  check_if_dir_exists $install_files_dir
+  
+  local image_files_count=$(ls $install_files_dir/*-image-*.tar.gz | wc -l)
+  [ $image_files_count -eq 0 ] && return 1
+  
+  log_info "Loading all dependent images from image files in dir: \
+          \n\t  [${install_files_dir}]..."
+  for image_file in $install_files_dir/*-image-*.tar.gz; do
+    exec_command_quietly "docker load < $image_file"
+    log_info "Complete loading image from file: [$(basename $image_file)]."
+  done
+}
+
+parse_docker_image_name_from_image_tag() {
+  check_if_func_args_num_equals_to 1 "image_tag"
+  echo "${1%:*}"
+}
+
+parse_docker_image_version_from_image_tag() {
+  check_if_func_args_num_equals_to 1 "image_tag"
+  if [ $(count_char_occurrences $1 ":") -eq 0 ]; then
+    echo "latest"
+  else
+    echo "${1#*:}"
+  fi
+}
+
+resolve_docker_image_filename_by_image_tag() {
+  check_if_func_args_num_at_least 1 "image_tag, [classifer]"
+  local image_tag=$1
+  local classifer=$2
+  
+  local image_name=$(parse_docker_image_name_from_image_tag $image_tag)
+  local image_version=$(parse_docker_image_version_from_image_tag $image_tag)
+  
+  local result="${image_name}"
+  if [ "$image_version" != "latest" ]; then
+    result="${result}-${image_version}"
+  fi
+  result="${result}-image"
+  if [ ! -z "$classifer" ]; then
+    result="${result}-${classifer}"
+  fi
+  echo "${result}.tar.gz"
+}
+
+resolve_docker_image_tag() {
+  check_if_func_args_num_at_least 1 "image_name, [image_version]"
+  local image_name=$1
+  local image_version=$2
+  
+  check_if_docker_image_name_valid $image_name
+
+  local result="$image_name"
+  if [ ! -z "$image_version" ] && [ "$image_version" != "latest" ]; then
+    check_if_docker_image_version_valid $image_version
+    result="${result}:${image_version}"
+  fi
+  echo "$result"
+}
+
+convert_app_name_to_docker_image_name() {
+  check_if_func_args_num_equals_to 1 "app_name"
+  local image_name="${1,,}"
+  
+  check_if_docker_image_name_valid $image_name
+  echo "$image_name"
+}
+
+convert_app_version_to_docker_image_version() {
+  check_if_func_args_num_at_most 1 "app_version"
+  local image_version="${1,,}"
+  
+  [ -z "$image_version" ] && echo "latest" && return 0
+  
+  check_if_docker_image_version_valid $image_version
+  echo "$image_version"
+}
+
+check_if_docker_image_exists() {
+  check_if_func_args_num_equals_to 1 "docker_image_tag"
+
+  if $(is_docker_image_not_exists "$1"); then
+    fail "Required docker image [$1] does not exist. \
+          \n\t  Please load it from image file or pull it first."
+  fi
+}
+
+check_if_docker_image_array_all_exist() {
+  check_if_func_args_num_at_least 1 "docker_image_tags..."
+  local image_tag_array=($@)
+  
+  local install_files_dir=$(get_install_files_dir)
+  local non_existing_image_tags=()
+  for image_tag in ${image_tag_array[@]}; do
+    if $(is_docker_image_not_exists $image_tag); then
+      non_existing_image_tags+=($image_tag)
+    fi
+  done
+
+  if [ "${#non_existing_image_tags[@]}" -eq 1 ]; then
+    fail "Required docker image $(colorize yellow "[${non_existing_image_tags[@]}]") does not exist. \
+          \n\t  $(colorize red "Please put the corresponding image file in following dir and try again:") \
+          \n\t  $(colorize yellow [${install_files_dir}])"
+  fi
+
+  if [ "${#non_existing_image_tags[@]}" -gt 1 ]; then
+    local non_existing_images=$(colorize yellow "[$(join_by ', ' ${non_existing_image_tags[@]})]")
+    fail "Required docker images do not exist: \
+          \n\t  $(colorize yellow "[$(join_by ', ' ${non_existing_image_tags[@]})].") \
+          \n\t  $(colorize red "Please put the corresponding image files in following dir and try again:") \
+          \n\t  $(colorize yellow [${install_files_dir}].)"
+  fi
+}
+
+
+resolve_unique_docker_image_filename() {
+  check_if_func_args_num_at_least 2 "image_file_dirpath, image_name, [image_version]"
+  local image_file_dirpath=$1
+  local image_name=$2
+  local image_version=$3
+  
+  local image_filename_pattern=$(get_docker_image_filename_pattern $image_name $image_version)
+  local file_desc="${image_name} image file"
+  echo "$(do_resolve_unique_filename_by_pattern $image_file_dirpath $image_filename_pattern "$file_desc")"
+}

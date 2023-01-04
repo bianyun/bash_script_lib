@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+get_container_volumes_local_dir() {
+  if [ -z "$BSL_CONTAINER_VOLUMES_LOCAL_DIR" ]; then
+    BSL_CONTAINER_VOLUMES_LOCAL_DIR="$(realpath ${SCRIPT_DIR}/../volumes_local)"
+  fi
+  echo "$BSL_CONTAINER_VOLUMES_LOCAL_DIR"
+}
+
+need_set_container_max_locked_memory_unlimited() {
+  [ "${SET_CONTAINER_MAX_LOCKED_MEMORY_UNLIMITED,,}" = "true" ] && echo true || echo false
+}
+
+get_container_local_conf_dir() {
+  echo "$(get_container_volumes_local_dir)/conf"
+}
+
+get_container_local_data_dir() {
+  echo "$(get_container_volumes_local_dir)/data"
+}
+
+get_container_local_logs_dir() {
+  echo "$(get_container_volumes_local_dir)/logs"
+}
+
+start_docker_container() {
+  check_if_func_args_num_equals_to 3 "app_name, image_name, image_version"
+  local app_name=$1
+  local image_name=$2
+  local image_version=$3
+
+  if [ -z "$container_name" ]; then
+    local container_name=$(get_docker_container_name $image_name $image_version)
+  fi
+  log_notice "Starting docker container [${container_name}]..."
+  
+  local image_tag="${image_name}:${image_version}"
+  local image_file_dirpath="$(get_install_files_dir)"
+  local image_tar_gz_filename=$(resolve_unique_docker_image_filename $image_file_dirpath $image_name $image_version)
+  local image_tar_gz_filepath="${image_file_dirpath}/${image_tar_gz_filename}"
+  
+  local image_sha256=$(parse_docker_image_sha256_from_image_file $image_tar_gz_filepath)
+  load_docker_image_if_needed $image_tag $image_tar_gz_filepath $image_sha256
+  generate_docker_compose_yml $app_name $container_name $image_tag 
+  
+  if $(is_docker_container_exists_and_running $container_name); then
+    warn_and_exit "Docker container [${container_name}] has already been started before."
+  else
+    cd $SCRIPT_DIR
+    if $(is_docker_compose_version_v2); then
+      exec_command_quietly "docker compose up -d"
+    else
+      exec_command_quietly "docker-compose up -d"
+    fi
+    log_success "Docker container [${container_name}] has been started successfully."
+  fi
+}
+
+generate_view_logs_shell_script() {
+  check_if_func_args_num_equals_to 2 "app_name, container_name"
+  local app_name=$1
+  local container_name=$2
+  
+  local target_script_file_path="${SCRIPT_DIR}/view_docker_logs_${app_name}.sh"
+  cat > "${target_script_file_path}" <<EOF
+#!/usr/bin/env bash
+
+docker logs -f --tail 300 ${container_name}
+EOF
+  chmod u+x "${target_script_file_path}"
+  change_owner_to_original_sudo_user "${target_script_file_path}"
+}

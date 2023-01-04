@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+get_local_timestamp() {
+  echo "$(date '+%Y-%m-%d %H:%M:%S')"
+}
+
+convert_seconds_human_readable_foramt() {
+  check_if_func_args_num_equals_to 1 "seconds"
+  local seconds=$1
+  
+  local hour=$(( $seconds/3600 ))
+  local min=$(( ($seconds-$hour*3600)/60 ))
+  local sec=$(( $seconds-$hour*3600-$min*60 ))
+  printf "%ds (%02d:%02d:%02d)" $seconds $hour $min $sec
+}

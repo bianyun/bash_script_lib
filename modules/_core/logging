@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+log_error() {
+  log_by_level error "$@"
+}
+
+log_warn() {
+  log_by_level warn "$@"
+}
+
+log_info() {
+  log_by_level info "$@"
+}
+
+log_debug() {
+  # Don't refatoring following three lines code to single line style
+  if $(is_debug_on); then
+    log_by_level debug "$@"
+  fi
+}
+
+log_success() {
+  log_by_level success "$@"
+}
+
+log_notice() {
+  log_by_level notice "$@"
+}
+
+log_by_level() {
+  check_if_func_args_num_at_least 1 "log_level, log_msg"
+  
+  local log_level="$1"
+  local log_msg="${@:2}"
+  
+  check_if_enum_type_func_param_value_valid "log_level, log_msg" "log_level"
+  
+  # if [ -z "$log_msg" ]; then
+    # return 1
+  # fi
+  [ -z "$log_msg" ] && return 1
+  
+  local log_level_label="[$(padding_left 7 "${log_level^^}")]"
+  local resolved_log_msg="$log_level_label $log_msg"
+  
+  if [ "$log_level" = "info" ]; then
+    >&2 echo -e "$resolved_log_msg"
+    return 0
+  fi
+
+  local color=$(get_color_by_log_level $log_level)
+  println_colored_text $color "$resolved_log_msg"
+}

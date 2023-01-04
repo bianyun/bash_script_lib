@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+BSL_REQUIRED_COMMANDS="yum rpm $BSL_REQUIRED_COMMANDS"
+
+resolve_command_of_install_pkgs_offline() {
+  check_if_func_args_num_equals_to 1 "pkgs_dir_path"
+  local pkgs_dir_path="$1"
+  
+  check_if_dir_exists $pkgs_dir_path
+  echo "yum --disablerepo=* install -y $pkgs_dir_path/*.rpm"
+}
+
+safely_install_local_pkgs_offline() {
+  check_if_func_args_num_equals_to 1 "pkgs_dir_path"
+  local pkgs_dir_path="$1"
+  
+  check_if_dir_exists $pkgs_dir_path
+  
+  local all_pkgs_in_dir_are_installed="true"
+  for rpm_file_path in $pkgs_dir_path/*.rpm; do
+    local full_rpm_pkgid=$(query_full_rpm_pkgid_from_rpmfile $rpm_file_path)
+    if $(is_rpm_pkg_not_installed "$full_rpm_pkgid"); then
+      all_pkgs_in_dir_are_installed="false"
+      break
+    fi
+  done
+  
+  if [ "$all_pkgs_in_dir_are_installed" = "false" ]; then
+    exec_command_quietly "$(resolve_command_of_install_pkgs_offline $pkgs_dir_path)" "rm -rf $pkgs_dir_path"
+  fi
+}
+
+query_full_rpm_pkgid_from_rpmfile() {
+  check_if_func_args_num_equals_to 1 "rpm_filepath"
+  local rpm_filepath=$1
+  
+  set +e
+  local full_rpm_pkgid=$(rpm -qp $rpm_filepath 2>/dev/null)
+  local result_code=$?
+  set -e
+  [ ! $result_code -eq 0 ] && fail "Cannot verify rpm file and query its full rpm pkgid: \
+                                    \n\t  [$rpm_filepath]"
+  
+  echo "$full_rpm_pkgid"
+}
+
+
+uninstall_pkgs_quietly() {
+  check_if_func_args_num_at_least 1 "pkg_names..."
+  local pkg_names="$@"
+  
+  set +e
+  yum remove "$pkg_names" > /dev/null 2>&1
+  set -e
+}

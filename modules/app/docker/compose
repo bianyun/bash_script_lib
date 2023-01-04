@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+
+resolve_docker_compose_filepath() {
+  echo "${SCRIPT_DIR}/docker-compose.yml"
+}
+
+resolve_docker_compose_file_version() {
+  check_if_func_args_num_equals_to 1 "docker_ce_version"
+  local docker_version=$1
+  
+  check_if_docker_ce_version_valid $docker_version
+  
+  if $(is_greater_than_or_equals_to $docker_version "19.03.13"); then
+    echo "3.9"
+  elif $(is_greater_than_or_equals_to $docker_version "19.03.0"); then
+    echo "3.8"
+  elif $(is_greater_than_or_equals_to $docker_version "18.06.0"); then
+    echo "3.7"
+  elif $(is_greater_than_or_equals_to $docker_version "18.02.0"); then
+    echo "3.6"
+  elif $(is_greater_than_or_equals_to $docker_version "17.12.0"); then
+    echo "3.5"
+  elif $(is_greater_than_or_equals_to $docker_version "17.09.0"); then
+    echo "3.4"
+  elif $(is_greater_than_or_equals_to $docker_version "17.06.0"); then
+    echo "3.3"
+  elif $(is_greater_than_or_equals_to $docker_version "17.04.0"); then
+    echo "3.2"
+  elif $(is_greater_than_or_equals_to $docker_version "17.03.0"); then
+    echo "3.1"
+  else
+    fail "Unsupported old docker version: $docker_version"
+  fi
+}
+
+resolve_min_docker_compose_plugin_version() {
+  check_if_func_args_num_equals_to 1 "docker_ce_version"
+  local docker_version=$1
+
+  check_if_docker_ce_version_valid $docker_version
+  
+  if $(is_greater_than_or_equals_to $docker_version "19.03.13"); then
+    echo "1.27.1"
+  elif $(is_greater_than_or_equals_to $docker_version "19.03.0"); then
+    echo "1.25.5"
+  elif $(is_greater_than_or_equals_to $docker_version "18.06.0"); then
+    echo "1.22.0"
+  elif $(is_greater_than_or_equals_to $docker_version "18.02.0"); then
+    echo "1.20.0"
+  elif $(is_greater_than_or_equals_to $docker_version "17.12.0"); then
+    echo "1.18.0"
+  elif $(is_greater_than_or_equals_to $docker_version "17.09.0"); then
+    echo "1.17.0"
+  elif $(is_greater_than_or_equals_to $docker_version "17.06.0"); then
+    echo "1.14.0"
+  elif $(is_greater_than_or_equals_to $docker_version "17.04.0"); then
+    echo "1.12.0"
+  elif $(is_greater_than_or_equals_to $docker_version "17.03.0"); then
+    echo "1.11.0"
+  else
+    fail "Unsupported old docker version: $docker_version"
+  fi
+}
+
+is_docker_compose_version_v2() {
+  [[ "$(get_existing_docker_version)" > "20.10.12" ]] && true || false
+}
+
+is_docker_compose_version_v1() {
+  $(is_docker_compose_version_v2) && false || true
+}
+
+append_container_env_config_if_needed() {
+  local docker_compose_filepath=$(resolve_docker_compose_filepath)
+
+  if [ ! -z "$container_environment_config" ]; then
+    cat <<EOF >> $docker_compose_filepath
+    environment:
+EOF
+    local old_ifs=$IFS
+    IFS=,
+    for config_item in ${container_environment_config[@]}; do
+      if [ ! -z "$config_item" ]; then
+        $(has_space "$config_item") && config_item="\"${config_item}\""
+        cat <<EOF >> $docker_compose_filepath
+      - ${config_item}
+EOF
+      fi
+    done
+    IFS=$old_ifs
+  fi
+}
+
+append_container_port_mappings_if_needed() {
+  local docker_compose_filepath=$(resolve_docker_compose_filepath)
+  
+  if [ ! -z "$container_port_mappings" ]; then
+    cat <<EOF >> $docker_compose_filepath
+    ports:
+EOF
+    local old_ifs=$IFS
+    IFS=,
+    for port_mapping_item in ${container_port_mappings[@]}; do
+      if [ ! -z "$port_mapping_item" ]; then
+        cat <<EOF >> $docker_compose_filepath
+      - "${port_mapping_item}"
+EOF
+      fi
+    done
+    IFS=$old_ifs
+  fi
+}
+
+append_container_volume_mappings_if_needed() {
+  local docker_compose_filepath=$(resolve_docker_compose_filepath)
+  
+  if [ ! -z "$container_volume_mappings" ]; then
+    cat <<EOF >> $docker_compose_filepath
+    volumes:
+EOF
+    local old_ifs=$IFS
+    IFS=,
+    for volumes_mapping_item in ${container_volume_mappings[@]}; do
+      if [ ! -z "$volumes_mapping_item" ]; then
+        cat <<EOF >> $docker_compose_filepath
+      - ${volumes_mapping_item}
+EOF
+      fi
+    done
+    IFS=$old_ifs
+  fi
+}
+
+append_container_sysctls_config_if_needed() {
+  local docker_compose_filepath=$(resolve_docker_compose_filepath)
+  
+  if [ ! -z "$container_sysctls_config" ]; then
+    cat <<EOF >> $docker_compose_filepath
+    sysctls:
+EOF
+    local old_ifs=$IFS
+    IFS=,
+    for sysctls_config_item in ${container_sysctls_config[@]}; do
+      if [ ! -z "$sysctls_config_item" ]; then
+        cat <<EOF >> $docker_compose_filepath
+      - ${sysctls_config_item}
+EOF
+      fi
+    done
+    IFS=$old_ifs
+  fi
+}
+
+append_container_command_config_if_needed() {
+  local docker_compose_filepath=$(resolve_docker_compose_filepath)
+  
+  if [ ! -z "$container_command_config" ]; then
+    cat <<EOF >> $docker_compose_filepath
+    command: ${container_command_config}
+EOF
+  fi
+}
+
+generate_docker_compose_yml() {
+  check_if_func_args_num_equals_to 3 "app_name, container_name, image_tag"
+  local app_name=$1
+  local container_name=$2
+  local image_tag=$3
+  
+  local docker_compose_filepath=$(resolve_docker_compose_filepath)
+  local docker_version=$(get_existing_docker_version)
+  local docker_compose_file_version=$(resolve_docker_compose_file_version $docker_version)
+
+  cat <<EOF > $docker_compose_filepath
+version: "${docker_compose_file_version}"
+services:
+  ${app_name}:
+    image: ${image_tag}
+    container_name: ${container_name}
+    restart: always
+    privileged: true
+EOF
+
+  if $(need_set_container_max_locked_memory_unlimited); then
+    cat <<EOF >> $docker_compose_filepath
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+EOF
+  fi
+
+  append_container_env_config_if_needed
+  
+  append_container_volume_mappings_if_needed
+  
+  append_container_sysctls_config_if_needed
+  
+  append_container_command_config_if_needed
+
+  if $(is_deployed_as_cluster); then
+    cat <<EOF >> $docker_compose_filepath
+    network_mode: host
+EOF
+  else
+    append_container_port_mappings_if_needed
+    cat <<EOF >> $docker_compose_filepath
+    networks:
+      - default
+networks:
+  default:
+    name: ${app_name}-default
+    driver: bridge
+EOF
+  fi
+  
+  change_owner_to_original_sudo_user $docker_compose_filepath
+}
+
+

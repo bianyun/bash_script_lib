@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+comment_single_line_by_keyword() {
+  check_if_func_args_num_equals_to 2 "filepath, keyword"
+  local filepath=$1
+  local keyword=$2
+  
+  sed -e "/${keyword}/s/^#*/#/" -i $filepath
+}
+
+uncomment_single_line_by_keyword() {
+  check_if_func_args_num_equals_to 2 "filepath, keyword"
+  local filepath=$1
+  local keyword=$2
+  
+  sed -e "/${keyword}/s/^#*//" -i $filepath
+}
+
+text_file_not_contains_key() {
+  check_if_func_args_num_equals_to 2 "filepath, keyword"
+  local filepath=$1
+  local keyword=$2
+  
+  [ $(cat "$filepath" | grep "$keyword" | wc -l) -eq 0 ] && echo true || echo false
+}
+
+text_file_contains_key() {
+  check_if_func_args_num_equals_to 2 "filepath, keyword"
+  local filepath=$1
+  local keyword=$2
+  
+  $(text_file_not_contains_key "$filepath" "$keyword") && echo false || echo true
+}
+
+change_file_ownership() {
+  check_if_func_args_num_equals_to 2 "user_and_group, dir_path"
+  local user_and_group=$1
+  local file_path=$2
+  [ -f $file_path ] && chown $user_and_group $file_path
+}

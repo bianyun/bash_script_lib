@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+is_docker_container_exists() {
+  check_if_func_args_num_equals_to 1 "container_name"
+  docker container inspect $1 > /dev/null 2>&1
+  [ $? -eq 0 ] && true || false 
+}
+
+is_docker_container_not_exists() {
+  check_if_func_args_num_equals_to 1 "container_name"
+
+  $(is_docker_container_exists "$1") && echo false || echo true
+}
+
+is_docker_container_exists_and_running() {
+  check_if_func_args_num_equals_to 1 "container_name"
+  local container_name=$1
+
+  $(is_docker_container_not_exists $container_name) && echo false && return 0
+  local container_status=$(get_docker_container_status $container_name)
+  [ "$container_status" = "running" ] && echo true || echo false
+}
+
+get_docker_container_name() {
+  check_if_func_args_num_equals_to 2 "image_name, image_version"
+  local image_name=$1
+  local image_version=$2
+  
+  local result="${image_name}"
+  if [ "${image_version,,}" != "latest" ]; then
+    result="${result}-${image_version}"
+  fi
+  
+  if $(is_deployed_as_cluster); then
+    result="${result}-$(get_cluster_node_id)"
+  fi
+  
+  echo "$result"
+}
+
+get_docker_app_desc() {
+  check_if_func_args_num_equals_to 2 "app_name, image_version"
+  local app_name=$1
+  local image_version=$2
+  
+  local result="${app_name}"
+  if [ "${image_version,,}" != "latest" ]; then
+    result="${result} v${image_version}"
+  fi
+  
+  if $(is_deployed_as_cluster); then
+    result="${result} (node: $(get_cluster_node_id))"
+  fi
+  echo "$result"
+}
+
+get_docker_container_status() {
+  check_if_func_args_num_equals_to 1 "container_name"
+  local container_name=$1
+  
+  if $(is_docker_container_not_exists $container_name); then
+    fail "Container [$container_name] does not exist."
+  fi
+  echo "$(docker container inspect ${container_name} -f '{{.State.Status}}')"
+}
+
+get_image_sha256_of_docker_container() {
+  check_if_func_args_num_equals_to 1 "container_name"
+  echo "$(docker container inspect $1 -f '{{.Image}}' | cut -d':' -f2)"
+}

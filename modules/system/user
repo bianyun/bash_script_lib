@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+change_owner_to_original_sudo_user() {
+  check_if_func_args_num_equals_to 1 "<filepath | dirpath>"
+  
+  local original_sudo_user="$SUDO_USER"
+  
+  if [ "$original_sudo_user" != "" ]; then
+    if [ -f "$1" ]; then
+      chown $original_sudo_user:$original_sudo_user "$1"
+    elif [ -d "$1" ]; then
+      chown -R $original_sudo_user:$original_sudo_user "$1"
+    fi
+  fi
+}

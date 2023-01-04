@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+
+do_nothing() {
+  echo "do nothing" > /dev/null
+}
+
+print() {
+  >&2 echo -n -e "$@"
+}
+
+println() {
+  >&2 echo -e "$@"
+}
+
+check_if_variable_defined() {
+  check_if_func_args_num_equals_to 1 "variable_name"
+  local variable_name=$1
+  local variable_value="${!variable_name}"
+  
+  [ -z "$variable_value" ] && fail "Required variable [$variable_name] not set."
+}
+
+println_legal_values() {
+  check_if_func_args_num_at_least 2 "value_type, legal_values..."
+  
+  local value_type=$1
+  local legal_values="${@:2}"
+  println "$(colorize cyan legal $value_type values:) [ $(join_by ' | ' $legal_values) ]"
+}
+
+println_one_line_usage() {
+  local caller_func_name="${FUNCNAME[1]}"
+  
+  if [ "$caller_func_name" = "main" ]; then
+    local args_array=($@)
+    caller_func_name="${args_array[0]}"
+    println "$(colorize blue Usage:) $(colorize yellow ${caller_func_name}) ${args_array[@]:1}"
+  else
+    println "$(colorize blue Usage:) $(colorize yellow ${caller_func_name}) $*"
+  fi
+}
+
+stacktrace() {
+  local frame="${1:-0}"
+  local LINE SUB FILE
+  
+  printf '\\t  [Stack Trace]: \\n'
+  while read LINE SUB FILE < <(caller "$frame"); do
+    local script_relative_path="${FILE/$BSL_SCRIPT_LIB_DIR}"
+    printf '\\t     %s @ %s:%s\\n' $SUB $script_relative_path $LINE
+    ((frame++))
+  done
+}
+
+println_func_failure_args_num_less_than_expected() {
+  if [ $# -ne 3 ]; then
+    println_one_line_usage "\\n\t  (frame, expected_args_num, caller_param_list)"
+    exitscript
+  fi
+  local frame=$(($1+1))
+  local caller_func_name="${FUNCNAME[$frame]}"
+  local expected_args_num=$2
+  local actual_args_num="${BASH_ARGC[$frame]}"
+  local caller_param_list=$3
+  
+  println "$(colorize red "[  ERROR] Failed to call function") $(colorize yellow "${caller_func_name}(")$(colorize blue $caller_param_list)$(colorize yellow ").") \
+      \\n\t  $(colorize red "Cause: Invalid args num, expected:") [$(colorize yellow \>=${expected_args_num})], actual: [$(colorize red ${actual_args_num})]."
+  println "$(colorize cyan "$(stacktrace $frame)")"
+}
+
+println_func_failure_args_num_greater_than_expected() {
+  if [ $# -ne 3 ]; then
+    println_one_line_usage "\\n\t  (frame, expected_args_num, caller_param_list)"
+    exitscript
+  fi
+  local frame=$(($1+1))
+  local caller_func_name="${FUNCNAME[$frame]}"
+  local expected_args_num=$2
+  local actual_args_num="${BASH_ARGC[$frame]}"
+  local caller_param_list=$3
+  
+  println "$(colorize red "[  ERROR] Failed to call function") $(colorize yellow "${caller_func_name}(")$(colorize blue $caller_param_list)$(colorize yellow ").") \
+      \\n\t  $(colorize red "Cause: Invalid args num, expected:") [$(colorize yellow \<=${expected_args_num})], actual: [$(colorize red ${actual_args_num})]."
+  println "$(colorize cyan "$(stacktrace $frame)")"
+}
+
+println_func_failure_args_num_not_equals_to_expected() {
+  if [ $# -ne 3 ]; then
+    println_one_line_usage "\\n\t  (frame, expected_args_num, caller_param_list)"
+    exitscript
+  fi
+  local frame=$(($1+1))
+  local caller_func_name="${FUNCNAME[$frame]}"
+  local expected_args_num=$2
+  local actual_args_num="${BASH_ARGC[$frame]}"
+  local caller_param_list=$3
+  
+  println "$(colorize red "[  ERROR] Failed to call function") $(colorize yellow "${caller_func_name}(")$(colorize blue $caller_param_list)$(colorize yellow ").") \
+      \\n\t  $(colorize red "Cause: Invalid args num, expected:") [$(colorize yellow ${expected_args_num})], actual: [$(colorize red ${actual_args_num})]."
+  println "$(colorize cyan "$(stacktrace $frame)")"
+}
+
+println_func_failure_enum_type_arg_value_invalid() {
+  if [ $# -ne 5 ]; then
+    println_one_line_usage "\\n\t  (frame, param_list, param_name, param_value, legal_param_values)"
+    exitscript
+  fi
+  local frame=$(($1+1))
+  local param_list=$2
+  local param_name=$3
+  local param_value=$4
+  local legal_param_values="$5"
+  local caller_func_name="${FUNCNAME[$frame]}"
+  
+  println "$(colorize red "[  ERROR] Failed to call function") $(colorize yellow "${caller_func_name}(")$(colorize blue $param_list)$(colorize yellow ").") \
+      \\n\t  $(colorize red "Cause: Illegal value of param") $(colorize blue $param_name): $(colorize red [$param_value]). \
+      \\n\t  $(colorize yellow "Legal values of param") $(colorize blue [$param_name]): [ $(join_by ' | ' $legal_param_values) ]"
+
+  println "$(colorize cyan "$(stacktrace $frame)")"
+}
+
+
+check_if_func_args_num_at_least() {
+  if [ ! $# -eq 2 ]; then
+    println_func_failure_args_num_not_equals_to_expected 0 2 "expected_args_num, caller_param_list"
+    exitscript
+  fi
+  
+  local caller_func_name="${FUNCNAME[1]}"
+  local caller_args_num="${BASH_ARGC[1]}"
+  local expected_args_num=$1
+  local caller_param_list=$2
+  
+  [ $caller_args_num -ge $expected_args_num ] && return 0
+
+  println_func_failure_args_num_less_than_expected 1 $expected_args_num "$caller_param_list"
+  exitscript
+}
+
+check_if_func_args_num_at_most() {
+  if [ ! $# -eq 2 ]; then
+    println_func_failure_args_num_not_equals_to_expected 0 2 "expected_args_num, caller_param_list"
+    exitscript
+  fi
+  
+  local caller_func_name="${FUNCNAME[1]}"
+  local caller_args_num="${BASH_ARGC[1]}"
+  local expected_args_num=$1
+  local caller_param_list=$2
+  
+  if [ $caller_args_num -le $expected_args_num ]; then
+    return 0
+  fi
+
+  println_func_failure_args_num_greater_than_expected 1 $expected_args_num "$caller_param_list"
+  exitscript
+}
+
+check_if_func_args_num_equals_to() {
+  if [ ! $# -eq 2 ]; then
+    println_func_failure_args_num_not_equals_to_expected 0 2 "expected_args_num, caller_param_list"
+    exitscript
+  fi
+  
+  local caller_func_name="${FUNCNAME[1]}"
+  local caller_args_num="${BASH_ARGC[1]}"
+  local expected_args_num=$1
+  local caller_param_list=$2
+  
+  # if [ $caller_args_num -eq $expected_args_num ]; then
+    # return 0
+  # fi
+  [ $caller_args_num -eq $expected_args_num ] && return 0
+
+  println_func_failure_args_num_not_equals_to_expected 1 $expected_args_num "$caller_param_list"
+  exitscript
+}
+
+check_if_enum_type_func_param_value_valid() {
+  if [ ! $# -eq 2 ]; then
+    println_func_failure_args_num_not_equals_to_expected 0 2 "param_list, param_name"
+    exitscript
+  fi
+  
+  local param_list=$1
+  local param_name=$2
+  local param_value="${!param_name}"
+  
+  local legal_param_values="$(get_legal_values_by_key $param_name)"
+
+  # if [ -z "$legal_param_values" ]; then
+    # fail "Cannot get legal values by key [$param_name]"
+  # fi
+  # if $(has_space $param_value); then
+    # fail "Value of param [$param_name] has space: [$param_value]."
+  # fi
+  
+  [ -z "$legal_param_values" ] && fail "Cannot get legal values by key [$param_name]"
+  $(has_space $param_value) && fail "Value of param [$param_name] has space: [$param_value]."
+
+  if $(is_array_not_contains_item "$legal_param_values" "$param_value"); then
+    println_func_failure_enum_type_arg_value_invalid 1 "$param_list" "$param_name" "$param_value" "$legal_param_values"
+    exitscript
+  fi
+}

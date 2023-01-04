@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+is_greater_than_or_equals_to() {
+  check_if_func_args_num_equals_to 2 "value_1, value_2"
+  
+  [[ "$1" > "$2" || "$1" == "$2" ]] && echo true || false
+}
+
+is_greater_than() {
+  check_if_func_args_num_equals_to 2 "value_1, value_2"
+  
+  [[ "$1" > "$2" ]] && echo true || false
+}
+
+is_less_than_or_equals_to() {
+  check_if_func_args_num_equals_to 2 "value_1, value_2"
+  
+  [[ "$1" < "$2" || "$1" == "$2" ]] && echo true || false
+}
+
+is_less_than() {
+  check_if_func_args_num_equals_to 2 "value_1, value_2"
+  
+  [[ "$1" < "$2" || "$1" == "$2" ]] && echo true || false
+}

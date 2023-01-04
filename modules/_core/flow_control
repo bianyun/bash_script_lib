@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+fail() {
+  check_if_func_args_num_at_least 1 "msg..."
+  log_error "$@" && exitscript
+}
+
+info_and_exit() {
+  check_if_func_args_num_at_least 1 "msg..."
+  log_info "$@" && exitscript
+}
+
+notice_and_exit() {
+  check_if_func_args_num_at_least 1 "msg..."
+  log_notice "$@" && exitscript
+}
+
+warn_and_exit() {
+  check_if_func_args_num_at_least 1 "msg..."
+  log_warn "$@" && exitscript
+}

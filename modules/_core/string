@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+join_by() {
+  check_if_func_args_num_at_least 2 "delimiter, array"
+  local d="${1-}"
+  local f="${2-}"
+  if shift 2; then
+    printf %s "$f" "${@/#/$d}"
+  fi
+}
+
+count_char_occurrences() {
+  check_if_func_args_num_equals_to 2 "str, char"
+  local str="$1"
+  local char="$2"
+  
+  local tmp="${str//[^${char}]}"
+  echo "${#tmp}"
+}
+
+padding_left() {
+  check_if_func_args_num_equals_to 2 "max_len, str"
+  local max_len=$1
+  local str=$2
+  eval "printf '%${max_len}s' $str"
+}
+
+has_space() {
+  check_if_func_args_num_equals_to 1 "str"
+  local str=$1
+  [ "$str" != "${str// /}" ] && echo true || echo false
+}
+
+contains_substr() {
+  check_if_func_args_num_equals_to 2 "str, sub_str"
+  local str=$1
+  local sub_str=$2
+  
+  [[ "$str" == *"$sub_str"* ]] && echo true || echo false
+}
+
+not_contains_substr() {
+  check_if_func_args_num_equals_to 2 "str, sub_str"
+  $(contains_substr "$@") && echo false || echo true
+}
+
+trim() {
+  check_if_func_args_num_at_least 1 "str"
+  echo "$@" | xargs
+}

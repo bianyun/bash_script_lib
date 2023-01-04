@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+check_if_no_need_to_install_app() {
+  check_if_func_args_num_equals_to 3 "app_name, app_version, main_cmd_name"
+  local app_name=$1
+  local app_version=$2
+  local main_cmd_name=$3
+  
+  $(is_command_not_valid $main_cmd_name) && return 0
+  
+  local existing_app_version=$(get_existing_app_version_by_main_command_name $main_cmd_name)
+  
+  [ -z "$existing_app_version" ] && fail "Cannot get app version by app_name: [$app_name]."
+  
+  if [[ $existing_app_version < $app_version ]]; then
+    log_warn "$app_name v${existing_app_version} already exists."
+    local prompt_msg="Do you want to upgrade $app_name to newer version: v${app_version}?"
+    if $(is_user_confirmed_yes $prompt_msg); then
+      log_info "upgrading to $app_name v${app_version}..."
+    else
+      notice_and_exit "You choose not to upgrade $app_name to newer version: v${app_version}."
+    fi
+  elif [[ $existing_app_version > $app_version ]]; then
+    fail "Newer $app_name version v${existing_app_version} already exists, cannot downgrade to older version: v${app_version}."
+  else
+    warn_and_exit "$app_name v${existing_app_version} has already been installed before."
+  fi
+}
+
+get_install_filename_pattern() {
+  check_if_func_args_num_at_least 1 "app_name, [app_version]"
+  local app_name=$1
+  local app_version=$2
+  
+  local result="${app_name}"
+  if [ ! -z "$app_version" ]; then
+    result="${result}-${app_version}"
+  fi
+  echo "${result}*.tar.gz"
+}
+
+show_msg_app_install_may_take_a_while() {
+  check_if_func_args_num_equals_to 1 "app_name"
+  log_info "Installing $1 may take a while, please wait..."
+}
+
+show_msg_app_install_finished() {
+  check_if_func_args_num_at_least 2 "log_level, app_desc, [trailing_str]"
+  log_by_level "$1" "$2 has been successfully installed. $3"
+}

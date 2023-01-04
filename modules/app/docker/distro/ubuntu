@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+uninstall_old_version_docker() {
+  uninstall_pkgs_quietly \
+    docker \
+    docker-engine \
+    docker.io \
+    containerd \
+    runc
+}

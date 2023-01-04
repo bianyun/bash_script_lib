@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+BSL_REQUIRED_COMMANDS="apt-get dpkg $BSL_REQUIRED_COMMANDS"
+
+safely_install_local_pkgs_offline() {
+  check_if_func_args_num_equals_to 1 "pkgs_dir_path"
+  local pkgs_dir_path="$1"
+  
+  check_if_dir_exists $pkgs_dir_path
+  
+  exec_command_quietly "dpkg -i $pkgs_dir_path/*.deb" "rm -rf $pkgs_dir_path"
+}
+
+
+uninstall_pkgs_quietly() {
+  check_if_func_args_num_at_least 1 "pkg_names..."
+  local pkg_names="$@"
+  
+  set +e
+  apt-get remove "$pkg_names" > /dev/null 2>&1
+  set -e
+}

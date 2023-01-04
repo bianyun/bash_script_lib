@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+uninstall_old_version_docker() {
+  uninstall_pkgs_quietly \
+    docker \
+    docker-client \
+    docker-client-latest \
+    docker-common \
+    docker-latest \
+    docker-latest-logrotate \
+    docker-logrotate \
+    docker-engine
+}

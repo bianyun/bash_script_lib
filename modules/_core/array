@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+BSL_REQUIRED_COMMANDS="read tr sort $BSL_REQUIRED_COMMANDS"
+
+make_array_uniq_and_sorted() {
+  check_if_func_args_num_at_least 1 "item..."
+  local array=($@)
+  
+  IFS=" " read -r -a array <<< "$(echo "${array[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+  echo "${array[@]}"
+}
+
+make_array_uniq_and_numeric_sorted() {
+  check_if_func_args_num_at_least 1 "item..."
+  local array=($@)
+  
+  IFS=" " read -r -a array <<< "$(echo "${array[@]}" | tr ' ' '\n' | sort -un | tr '\n' ' ')"
+  echo "${array[@]}"
+}
+
+make_array_uniq_and_human_numeric_sorted() {
+  check_if_func_args_num_at_least 1 "item..."
+  local array=($@)
+  
+  IFS=" " read -r -a array <<< "$(echo "${array[@]}" | tr ' ' '\n' | sort -uh | tr '\n' ' ')"
+  echo "${array[@]}"
+}
+
+is_array_contains_item() {
+  check_if_func_args_num_equals_to 2 "array, item"
+  local array=($1)
+  local item=$2
+  
+  [[ " ${array[*]} " =~ " $item " ]] && echo true || echo false
+}
+
+is_array_not_contains_item() {
+  check_if_func_args_num_equals_to 2 "array, item"
+  $(is_array_contains_item "$@") && echo false || echo true
+}
+
